@@ -1,0 +1,51 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 60MB
+
+docify:
+  storage:
+    type: local
+    local-dir: ${DOCIFY_STORAGE_DIR:/app/storage}
+    temp-dir: ${DOCIFY_TEMP_DIR:/app/storage/tmp}
+    result-dir: ${DOCIFY_RESULT_DIR:/app/storage/results}
+    ttl-minutes: 60
+
+  gotenberg:
+    base-url: ${GOTENBERG_URL:http://gotenberg:3000}
+
+  pandoc:
+    binary-path: ${PANDOC_BINARY:pandoc}
+
+logging:
+  level:
+    root: INFO
+    com.docify: INFO
