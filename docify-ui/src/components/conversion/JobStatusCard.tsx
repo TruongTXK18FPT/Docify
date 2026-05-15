@@ -5,15 +5,29 @@ import { ProgressBar } from '../ui/ProgressBar';
 import { Button } from '../ui/Button';
 import { Download, RefreshCcw, FileText, Calendar, Clock } from 'lucide-react';
 import { formatBytes } from '../../lib/utils';
+import { conversionService } from '../../services/conversion-service';
 
 interface JobStatusCardProps {
   job: ConversionJob;
   onReset?: () => void;
+  onCancel?: () => void;
 }
 
-export const JobStatusCard = ({ job, onReset }: JobStatusCardProps) => {
+export const JobStatusCard = ({ job, onReset, onCancel }: JobStatusCardProps) => {
   const isCompleted = job.status === 'COMPLETED';
-  const isProcessing = job.status === 'PROCESSING' || job.status === 'PENDING';
+  const isProcessing = job.status === 'PROCESSING' || job.status === 'PENDING' || job.status === 'QUEUED';
+
+  const handleDownload = async () => {
+    const blob = await conversionService.downloadJob(job.id);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = buildDownloadName(job);
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Card className="overflow-hidden border-2 border-primary/10">
@@ -25,7 +39,7 @@ export const JobStatusCard = ({ job, onReset }: JobStatusCardProps) => {
             </div>
             <div>
               <h3 className="font-bold text-text-dark truncate max-w-[180px]">{job.fileName}</h3>
-              <p className="text-xs text-text-muted">{formatBytes(job.fileSize)}</p>
+              <p className="text-xs text-text-muted">{formatBytes(job.fileSize || 0)}</p>
             </div>
           </div>
           <StatusBadge status={job.status} />
@@ -51,7 +65,7 @@ export const JobStatusCard = ({ job, onReset }: JobStatusCardProps) => {
               <Button 
                 className="flex-1" 
                 leftIcon={<Download className="w-4 h-4" />}
-                onClick={() => window.open(job.resultUrl, '_blank')}
+                onClick={handleDownload}
               >
                 Download result
               </Button>
@@ -67,9 +81,13 @@ export const JobStatusCard = ({ job, onReset }: JobStatusCardProps) => {
           ) : (
             <div className="flex flex-col gap-2">
               <p className="text-[11px] text-text-muted text-center animate-pulse">
-                {job.status === 'PENDING' ? 'Waiting in queue...' : 'Processing your document...'}
+                {job.status === 'QUEUED' || job.status === 'PENDING' ? 'Waiting in queue...' : 'Processing your document...'}
               </p>
-              <Button variant="outline" onClick={onReset}>Cancel</Button>
+              {isProcessing ? (
+                <Button variant="outline" onClick={onCancel}>Cancel</Button>
+              ) : (
+                <Button variant="outline" onClick={onReset}>Convert another</Button>
+              )}
             </div>
           )}
         </div>
@@ -80,18 +98,29 @@ export const JobStatusCard = ({ job, onReset }: JobStatusCardProps) => {
               <Calendar className="w-3.5 h-3.5" />
               <span>Created at:</span>
             </div>
-            <span>{new Date(job.createdAt).toLocaleTimeString()}</span>
+            <span>{job.createdAt ? new Date(job.createdAt).toLocaleTimeString() : '-'}</span>
           </div>
           <div className="flex items-center justify-between text-[11px] text-text-muted">
             <div className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
               <span>Auto-delete:</span>
             </div>
-            <span className="font-medium text-amber-600">In 59 mins</span>
+            <span className="font-medium text-amber-600">{job.expiresAt ? new Date(job.expiresAt).toLocaleTimeString() : '-'}</span>
           </div>
+          {job.errorMessage && (
+            <p className="text-[10px] text-red-500 text-center mt-2">{job.errorMessage}</p>
+          )}
           <p className="text-[10px] text-slate-400 italic text-center mt-2">Job ID: {job.id}</p>
         </div>
       </div>
     </Card>
   );
 };
+
+function buildDownloadName(job: ConversionJob) {
+  const filename = job.fileName || `converted_file.${job.targetType}`;
+  if (!filename.includes('.')) {
+    return `${filename}.${job.targetType}`;
+  }
+  return `${filename.substring(0, filename.lastIndexOf('.'))}.${job.targetType}`;
+}

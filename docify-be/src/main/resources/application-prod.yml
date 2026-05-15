@@ -1,9 +1,11 @@
 server:
   port: 8080
-  servlet:
-    context-path: /api
 
 spring:
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -35,8 +37,9 @@ docify:
   storage:
     type: local
     local-dir: ${DOCIFY_STORAGE_DIR:/app/storage}
-    temp-dir: ${DOCIFY_TEMP_DIR:/app/storage/tmp}
-    result-dir: ${DOCIFY_RESULT_DIR:/app/storage/results}
+    local:
+      temp-dir: ${DOCIFY_TEMP_DIR:/app/storage/tmp}
+      result-dir: ${DOCIFY_RESULT_DIR:/app/storage/results}
     ttl-minutes: 60
 
   gotenberg:

@@ -2,32 +2,40 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { FileText, Mail, Lock, User, ArrowRight, Github, Chrome } from 'lucide-react';
+import { AlertCircle, FileText, Mail, Lock, User, ArrowRight, Github, Chrome } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { authService } from '../services/auth-service';
 
 export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate auth
-    setTimeout(() => {
-      setIsLoading(false);
+    setError(null);
+
+    try {
+      if (isLogin) {
+        await authService.login(email, password);
+      } else {
+        await authService.register(name, email, password);
+      }
       navigate('/convert');
-    }, 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Authentication failed.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center py-12 px-4 bg-slate-50 relative overflow-hidden">
-      {/* Background Decor */}
-      <div className="absolute top-0 left-0 w-full h-full -z-10">
-        <div className="absolute top-1/4 -left-20 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-secondary/10 rounded-full blur-3xl animate-pulse" />
-      </div>
-
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -44,7 +52,7 @@ export function AuthPage() {
             {isLogin ? 'Welcome back to Docify' : 'Create your free account'}
           </h1>
           <p className="text-text-muted mt-2">
-            {isLogin ? 'Enter your details to access your dashboard' : 'Join thousands of users converting files daily'}
+            {isLogin ? 'Enter your details to access conversions' : 'Create an account to start converting files'}
           </p>
         </div>
 
@@ -64,7 +72,9 @@ export function AuthPage() {
                   </label>
                   <input
                     type="text"
-                    required
+                    required={!isLogin}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
                     placeholder="John Doe"
                     className="w-full px-4 h-11 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   />
@@ -80,23 +90,24 @@ export function AuthPage() {
               <input
                 type="email"
                 required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 placeholder="yours@example.com"
                 className="w-full px-4 h-11 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               />
             </div>
 
             <div className="space-y-1">
-              <div className="flex justify-between items-center">
-                <label className="text-sm font-bold text-text-dark flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-text-muted" />
-                  Password
-                </label>
-                {isLogin && <a href="#" className="text-xs text-primary font-bold hover:underline">Forgot?</a>}
-              </div>
+              <label className="text-sm font-bold text-text-dark flex items-center gap-2">
+                <Lock className="w-4 h-4 text-text-muted" />
+                Password
+              </label>
               <input
                 type="password"
                 required
-                placeholder="••••••••"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Password"
                 className="w-full px-4 h-11 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               />
             </div>
@@ -109,11 +120,18 @@ export function AuthPage() {
             >
               {isLogin ? 'Sign in to account' : 'Create account'}
             </Button>
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl flex items-center gap-2 text-red-600 text-xs font-medium">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {error}
+              </div>
+            )}
           </form>
 
           <div className="relative my-8">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-100"></div>
+              <div className="w-full border-t border-slate-100" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-white px-4 text-text-muted font-bold">Or continue with</span>
@@ -121,10 +139,10 @@ export function AuthPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Button variant="outline" className="w-full py-0 h-11 text-sm bg-white" leftIcon={<Chrome className="w-4 h-4 text-red-500" />}>
+            <Button type="button" variant="outline" className="w-full py-0 h-11 text-sm bg-white" leftIcon={<Chrome className="w-4 h-4 text-red-500" />} onClick={() => window.location.href = 'http://localhost:8080/oauth2/authorization/google'}>
               Google
             </Button>
-            <Button variant="outline" className="w-full py-0 h-11 text-sm bg-white" leftIcon={<Github className="w-4 h-4" />}>
+            <Button type="button" variant="outline" className="w-full py-0 h-11 text-sm bg-white" leftIcon={<Github className="w-4 h-4" />} onClick={() => window.location.href = 'http://localhost:8080/oauth2/authorization/github'}>
               GitHub
             </Button>
           </div>
@@ -133,7 +151,10 @@ export function AuthPage() {
         <p className="text-center mt-8 text-sm text-text-muted">
           {isLogin ? "Don't have an account?" : "Already have an account?"}{' '}
           <button
-            onClick={() => setIsLogin(!isLogin)}
+            onClick={() => {
+              setError(null);
+              setIsLogin(!isLogin);
+            }}
             className="text-primary font-bold hover:underline"
           >
             {isLogin ? 'Sign up for free' : 'Sign in instead'}

@@ -1,0 +1,55 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: docify-be
+
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    open-in-view: false
+
+  h2:
+    console:
+      enabled: false
+
+  data:
+    redis:
+      enabled: false
+
+  rabbitmq:
+    enabled: false
+    listener:
+      simple:
+        auto-startup: false
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 60MB
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+docify:
+  storage:
+    type: local
+    local-dir: ./storage
+    local:
+      temp-dir: ./storage/tmp
+      result-dir: ./storage/results
+
+  conversion:
+    max-file-size-mb: 50

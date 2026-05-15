@@ -1,6 +1,6 @@
 import { cn } from '../../lib/utils';
 import { JobStatus } from '../../lib/types';
-import { CheckCircle2, Clock, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Loader2, AlertCircle, Ban } from 'lucide-react';
 
 interface StatusBadgeProps {
   status: JobStatus;
@@ -13,6 +13,11 @@ export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
       color: 'bg-amber-50 text-amber-600 border-amber-200',
       icon: <Clock className="w-3.5 h-3.5" />,
       label: 'Pending'
+    },
+    QUEUED: {
+      color: 'bg-amber-50 text-amber-600 border-amber-200',
+      icon: <Clock className="w-3.5 h-3.5" />,
+      label: 'Queued'
     },
     PROCESSING: {
       color: 'bg-blue-50 text-blue-600 border-blue-200',
@@ -28,6 +33,16 @@ export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
       color: 'bg-red-50 text-red-600 border-red-200',
       icon: <AlertCircle className="w-3.5 h-3.5" />,
       label: 'Failed'
+    },
+    CANCELLED: {
+      color: 'bg-slate-50 text-slate-600 border-slate-200',
+      icon: <Ban className="w-3.5 h-3.5" />,
+      label: 'Cancelled'
+    },
+    EXPIRED: {
+      color: 'bg-slate-50 text-slate-600 border-slate-200',
+      icon: <Clock className="w-3.5 h-3.5" />,
+      label: 'Expired'
     }
   };
 

@@ -6,6 +6,7 @@ import java.io.InputStream;
 public interface StorageService {
     String save(MultipartFile file);
     String save(InputStream inputStream, String originalFilename);
+    String saveResult(InputStream inputStream, String originalFilename);
     InputStream read(String path);
     void delete(String path);
 }

@@ -4,7 +4,6 @@ import com.docify.docify_be.common.exception.DocifyException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -19,11 +18,17 @@ public class PandocService implements ConversionEngine {
     @Value("${docify.storage.local.temp-dir:/tmp/docify}")
     private String tempDirPath;
 
+    @Value("${docify.pandoc.binary-path:pandoc}")
+    private String pandocBinaryPath;
+
+    @Value("${docify.pandoc.timeout-seconds:120}")
+    private long timeoutSeconds;
+
     @Override
     public boolean supports(String sourceType, String targetType) {
-        String src = sourceType != null ? sourceType.toLowerCase() : "";
-        String tgt = targetType != null ? targetType.toLowerCase() : "";
-        
+        String src = normalize(sourceType);
+        String tgt = normalize(targetType);
+
         if (src.equals("md") || src.equals("markdown")) {
             return tgt.equals("docx") || tgt.equals("pdf");
         }
@@ -34,57 +39,51 @@ public class PandocService implements ConversionEngine {
     }
 
     @Override
-    public InputStream convert(InputStream sourceStream, String originalFilename) throws Exception {
+    public InputStream convert(InputStream sourceStream, String sourceType, String targetType, String originalFilename) throws Exception {
+        Files.createDirectories(Path.of(tempDirPath));
+
         String baseName = UUID.randomUUID().toString();
-        Path inputPath = Path.of(tempDirPath, baseName + "_input");
-        Path outputPath = Path.of(tempDirPath, baseName + "_output");
+        String sourceExt = normalize(sourceType).equals("markdown") ? "md" : normalize(sourceType);
+        String targetExt = normalize(targetType).equals("markdown") ? "md" : normalize(targetType);
+        Path inputPath = Path.of(tempDirPath, baseName + "_input." + sourceExt).toAbsolutePath().normalize();
+        Path outputPath = Path.of(tempDirPath, baseName + "_output." + targetExt).toAbsolutePath().normalize();
 
         try {
-            // Save input stream to temp file for Pandoc processing
             Files.copy(sourceStream, inputPath, StandardCopyOption.REPLACE_EXISTING);
 
-            String srcExt = getExtension(originalFilename);
-            String tgtExt = getTargetExtension(originalFilename); // Hack for MVP: infer from logic
+            ProcessBuilder processBuilder = new ProcessBuilder(
+                    pandocBinaryPath,
+                    inputPath.toString(),
+                    "-o",
+                    outputPath.toString()
+            );
+            processBuilder.redirectErrorStream(true);
+            Process process = processBuilder.start();
 
-            // Start Process
-            ProcessBuilder pb = new ProcessBuilder("pandoc", inputPath.toString(), "-o", outputPath.toString());
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-
-            boolean finished = process.waitFor(60, TimeUnit.SECONDS);
-
+            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 throw new DocifyException("PANDOC_TIMEOUT", "Pandoc process timed out.");
             }
 
             if (process.exitValue() != 0) {
-                byte[] errorBytes = process.getInputStream().readAllBytes();
-                String errorMsg = new String(errorBytes);
+                String errorMsg = new String(process.getInputStream().readAllBytes());
                 throw new DocifyException("PANDOC_ERROR", "Pandoc conversion failed: " + errorMsg);
             }
 
-            // Return input stream of output file
             return new FileInputStream(outputPath.toFile()) {
                 @Override
                 public void close() throws java.io.IOException {
                     super.close();
-                    // Cleanup output temp file after stream is closed
                     Files.deleteIfExists(outputPath);
                 }
             };
         } finally {
-            // Cleanup input temp file immediately
             Files.deleteIfExists(inputPath);
         }
     }
 
-    private String getExtension(String filename) {
-        if (filename == null || !filename.contains(".")) return "";
-        return filename.substring(filename.lastIndexOf(".") + 1).toLowerCase();
-    }
-    
-    private String getTargetExtension(String filename) {
-        return "pdf"; // Default fallback
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase();
     }
 }

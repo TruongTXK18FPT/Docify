@@ -1,19 +1,54 @@
 server:
   port: 8080
-  servlet:
-    context-path: /api
 
 spring:
   application:
     name: docify-be
 
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
   profiles:
     active: dev
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:local-google-client-id}
+            client-secret: ${GOOGLE_CLIENT_SECRET:local-google-client-secret}
+            redirect-uri: "{baseUrl}/oauth2/callback/{registrationId}"
+            scope:
+              - email
+              - profile
+            
+          github:
+            client-id: ${GITHUB_CLIENT_ID:local-github-client-id}
+            client-secret: ${GITHUB_CLIENT_SECRET:local-github-client-secret}
+            redirect-uri: "{baseUrl}/oauth2/callback/{registrationId}"
+            scope:
+              - user:email
+              - read:user
+
+        provider:
+          google:
+            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+            token-uri: https://www.googleapis.com/oauth2/v4/token
+            user-info-uri: https://www.googleapis.com/oauth2/v1/userinfo
+            user-name-attribute: id
+            
+          github:
+            authorization-uri: https://github.com/login/oauth/authorize
+            token-uri: https://github.com/login/oauth/access_token
+            user-info-uri: https://api.github.com/user
+            user-name-attribute: id
 
   datasource:
     url: jdbc:postgresql://localhost:5432/docify_db
     username: postgres
-    password: 12345
+    password: 123456
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -41,7 +76,8 @@ spring:
     virtual-host: /
     listener:
       simple:
-        acknowledge-mode: manual
+        acknowledge-mode: auto
+        default-requeue-rejected: false
         retry:
           enabled: true
           initial-interval: 2000ms
@@ -68,8 +104,9 @@ docify:
   storage:
     type: local
     local-dir: ./storage
-    temp-dir: ./storage/tmp
-    result-dir: ./storage/results
+    local:
+      temp-dir: ./storage/tmp
+      result-dir: ./storage/results
     ttl-minutes: 60
 
   conversion:
@@ -107,6 +144,9 @@ docify:
   cleanup:
     enabled: true
     cron: "0 */10 * * * *"
+
+  oauth2:
+    redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth2/redirect}
 
 logging:
   level:

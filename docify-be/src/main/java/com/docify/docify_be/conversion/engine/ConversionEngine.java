@@ -4,5 +4,5 @@ import java.io.InputStream;
 
 public interface ConversionEngine {
     boolean supports(String sourceType, String targetType);
-    InputStream convert(InputStream sourceStream, String originalFilename) throws Exception;
+    InputStream convert(InputStream sourceStream, String sourceType, String targetType, String originalFilename) throws Exception;
 }

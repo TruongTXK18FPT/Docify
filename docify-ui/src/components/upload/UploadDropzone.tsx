@@ -77,7 +77,7 @@ export const UploadDropzone = ({ onFileSelect, selectedFile, onClear, className 
         ref={inputRef}
         onChange={handleFileChange}
         className="hidden"
-        accept=".pdf,.docx,.md,.pptx"
+        accept=".docx,.md,.markdown,.pptx"
       />
       <div className={cn(
         "w-16 h-16 mb-6 rounded-2xl flex items-center justify-center transition-transform duration-300",
@@ -87,7 +87,7 @@ export const UploadDropzone = ({ onFileSelect, selectedFile, onClear, className 
       </div>
       <div>
         <h3 className="text-lg font-bold text-text-dark mb-1">Select or drag file</h3>
-        <p className="text-sm text-text-muted mb-4">PDF, DOCX, MD, PPTX supported (max 20MB)</p>
+        <p className="text-sm text-text-muted mb-4">DOCX, MD, PPTX supported (max 50MB)</p>
       </div>
       
       <div className="flex items-center gap-2 py-2 px-4 bg-slate-100 rounded-full text-xs font-semibold text-slate-500 group-hover:bg-primary group-hover:text-white transition-colors">

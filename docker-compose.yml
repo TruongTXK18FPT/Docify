@@ -1,0 +1,117 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: docify-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: docify_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+    ports:
+      - "5432:5432"
+    volumes:
+      - docify-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d docify_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: docify-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - docify-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: docify-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: docify
+      RABBITMQ_DEFAULT_PASS: docify
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - docify-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: docify-gotenberg
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+
+  backend:
+    build:
+      context: ./docify-be
+      dockerfile: Dockerfile
+    container_name: docify-backend
+    restart: unless-stopped
+    env_file:
+      - ./docify-be/.env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/docify_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: 123456
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: docify
+      RABBITMQ_PASSWORD: docify
+      GOTENBERG_URL: http://gotenberg:3000
+      DOCIFY_STORAGE_DIR: /app/storage
+      DOCIFY_TEMP_DIR: /app/storage/tmp
+      DOCIFY_RESULT_DIR: /app/storage/results
+      PANDOC_BINARY: pandoc
+      OAUTH2_REDIRECT_URI: http://localhost:3000/oauth2/redirect
+    ports:
+      - "8080:8080"
+    volumes:
+      - docify-storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      gotenberg:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./docify-ui
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8080
+    container_name: docify-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  docify-postgres-data:
+  docify-redis-data:
+  docify-rabbitmq-data:
+  docify-storage:

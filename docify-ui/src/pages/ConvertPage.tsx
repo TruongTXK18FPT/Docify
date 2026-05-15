@@ -1,67 +1,81 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { UploadDropzone } from '../components/upload/UploadDropzone';
 import { ConversionSelector } from '../components/conversion/ConversionSelector';
 import { JobStatusCard } from '../components/conversion/JobStatusCard';
-import { FileType, ConversionJob, JobStatus } from '../lib/types';
-import { AlertCircle, History, Info } from 'lucide-react';
+import { FileType, ConversionJob } from '../lib/types';
+import { AlertCircle, History, Info, Rocket } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { conversionService } from '../services/conversion-service';
+
+const TERMINAL_STATUSES = new Set(['COMPLETED', 'FAILED', 'CANCELLED', 'EXPIRED']);
 
 export function ConvertPage() {
   const [file, setFile] = useState<File | null>(null);
   const [targetType, setTargetType] = useState<FileType | null>(null);
   const [activeJob, setActiveJob] = useState<ConversionJob | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const uploadControllerRef = useRef<AbortController | null>(null);
 
-  const sourceType = file ? file.name.split('.').pop()?.toLowerCase() as FileType : null;
+  const sourceType = file ? normalizeSourceType(file.name.split('.').pop()?.toLowerCase()) : null;
 
-  const handleConvert = () => {
+  useEffect(() => {
+    if (!activeJob || TERMINAL_STATUSES.has(activeJob.status)) {
+      return;
+    }
+
+    const interval = window.setInterval(async () => {
+      try {
+        const nextJob = await conversionService.getJob(activeJob.id);
+        setActiveJob(nextJob);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not refresh job status.');
+      }
+    }, 2000);
+
+    return () => window.clearInterval(interval);
+  }, [activeJob?.id, activeJob?.status]);
+
+  const handleConvert = async () => {
     if (!file || !targetType) {
-      setError("Please select a file and target format.");
+      setError('Please select a file and target format.');
       return;
     }
 
     setError(null);
-    const jobId = (window.crypto?.randomUUID?.() || Math.random().toString(36).substring(2, 10)).slice(0, 8);
-    
-    // Initialize job
-    const newJob: ConversionJob = {
-      id: `job-${jobId}`,
-      fileName: file.name,
-      fileSize: file.size,
-      sourceType: sourceType!,
-      targetType,
-      status: 'PENDING',
-      progress: 0,
-      createdAt: new Date().toISOString()
-    };
+    setIsUploading(true);
+    uploadControllerRef.current = new AbortController();
 
-    setActiveJob(newJob);
-
-    // Simulate conversion process
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 15;
-      
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        setActiveJob(prev => prev ? { 
-          ...prev, 
-          progress: 100, 
-          status: 'COMPLETED',
-          resultUrl: '#' 
-        } : null);
+    try {
+      const job = await conversionService.createJob(file, targetType, uploadControllerRef.current.signal);
+      setActiveJob(job);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('Upload cancelled.');
       } else {
-        setActiveJob(prev => prev ? { 
-          ...prev, 
-          progress, 
-          status: progress > 5 ? 'PROCESSING' : 'PENDING' 
-        } : null);
+        setError(err instanceof Error ? err.message : 'Could not start conversion.');
       }
-    }, 400);
+    } finally {
+      setIsUploading(false);
+      uploadControllerRef.current = null;
+    }
+  };
+
+  const handleCancel = async () => {
+    uploadControllerRef.current?.abort();
+    if (activeJob && !TERMINAL_STATUSES.has(activeJob.status)) {
+      try {
+        const cancelled = await conversionService.cancelJob(activeJob.id);
+        setActiveJob(cancelled);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not cancel conversion.');
+      }
+    } else {
+      resetAll();
+    }
   };
 
   const resetAll = () => {
@@ -69,6 +83,7 @@ export function ConvertPage() {
     setTargetType(null);
     setActiveJob(null);
     setError(null);
+    setIsUploading(false);
   };
 
   return (
@@ -129,7 +144,7 @@ export function ConvertPage() {
                 className="w-full sm:w-auto"
                 disabled={!file || !targetType || !!activeJob}
                 onClick={handleConvert}
-                isLoading={!!activeJob && activeJob.status !== 'COMPLETED' && activeJob.status !== 'FAILED'}
+                isLoading={isUploading}
               >
                 Save & Convert
               </Button>
@@ -139,7 +154,7 @@ export function ConvertPage() {
           <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex gap-3 text-blue-800">
             <Info className="w-5 h-5 shrink-0 mt-0.5" />
             <p className="text-xs leading-relaxed">
-              <strong>Pro Tip:</strong> You can convert Markdown files to DOCX or PDF. If you have images in your PDF, they will be preserved in the resulting DOCX format.
+              <strong>Pro Tip:</strong> MVP supports Markdown to DOCX/PDF, DOCX to Markdown/PDF, and PPTX to PDF. Files are automatically deleted after 1 hour.
             </p>
           </div>
         </div>
@@ -155,7 +170,7 @@ export function ConvertPage() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                 >
-                  <JobStatusCard job={activeJob} onReset={resetAll} />
+                  <JobStatusCard job={activeJob} onReset={resetAll} onCancel={handleCancel} />
                 </motion.div>
               ) : (
                 <motion.div
@@ -174,17 +189,6 @@ export function ConvertPage() {
                 </motion.div>
               )}
             </AnimatePresence>
-            
-            <div className="mt-8 px-4 py-3 bg-primary/5 rounded-xl border border-primary/10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-primary uppercase">Current Quota</span>
-                <span className="text-[10px] font-bold text-text-muted">5 / 10 daily</span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-primary w-1/2 rounded-full" />
-              </div>
-              <p className="text-[9px] text-text-muted mt-2 text-center">Upgrade to Business for unlimited conversions.</p>
-            </div>
           </div>
         </div>
       </div>
@@ -192,6 +196,9 @@ export function ConvertPage() {
   );
 }
 
-const Rocket = ({ className }: { className?: string }) => (
-  <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"/><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"/></svg>
-);
+function normalizeSourceType(type?: string): FileType | null {
+  if (!type) {
+    return null;
+  }
+  return type === 'markdown' ? 'md' : type as FileType;
+}

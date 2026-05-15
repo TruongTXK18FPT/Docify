@@ -12,11 +12,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.util.EnumSet;
 import java.util.List;
 
 @Slf4j
@@ -24,18 +24,29 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ConversionWorker {
 
+    private static final EnumSet<JobStatus> TERMINAL_STATUSES = EnumSet.of(
+            JobStatus.COMPLETED,
+            JobStatus.CANCELLED,
+            JobStatus.EXPIRED
+    );
+
     private final ConversionJobRepository jobRepository;
     private final StorageService storageService;
     private final List<ConversionEngine> engines;
 
     @RabbitListener(queues = RabbitMQConfig.CONVERSION_QUEUE)
-    @Transactional
+    @Transactional(noRollbackFor = Exception.class)
     public void processConversion(ConversionMessage message) {
-        log.info("Received conversion job: {}", message.getJobId());
+        Instant startedAt = Instant.now();
+        log.info("jobId={} status=RECEIVED source={} target={}", message.getJobId(), message.getSourceType(), message.getTargetType());
 
         ConversionJob job = jobRepository.findById(message.getJobId()).orElse(null);
         if (job == null) {
-            log.error("Job {} not found in database.", message.getJobId());
+            log.warn("jobId={} status=SKIPPED reason=JOB_NOT_FOUND", message.getJobId());
+            return;
+        }
+        if (TERMINAL_STATUSES.contains(job.getStatus())) {
+            log.info("jobId={} status=SKIPPED currentStatus={}", job.getId(), job.getStatus());
             return;
         }
 
@@ -44,47 +55,51 @@ public class ConversionWorker {
             job.setProgress(10);
             jobRepository.saveAndFlush(job);
 
-            ConversionEngine activeEngine = null;
-            for (ConversionEngine engine : engines) {
-                if (engine.supports(job.getSourceType(), job.getTargetType())) {
-                    activeEngine = engine;
-                    break;
-                }
-            }
+            ConversionEngine activeEngine = engines.stream()
+                    .filter(engine -> engine.supports(job.getSourceType(), job.getTargetType()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("No suitable engine found for " + job.getSourceType() + " -> " + job.getTargetType()));
 
-            if (activeEngine == null) {
-                throw new IllegalStateException("No suitable engine found for " + job.getSourceType() + " -> " + job.getTargetType());
-            }
-
-            // Read source file from storage
-            job.setProgress(20);
+            job.setProgress(30);
             jobRepository.saveAndFlush(job);
-            
+
             try (InputStream sourceStream = storageService.read(job.getSourceFileUrl())) {
-                job.setProgress(50);
+                job.setProgress(70);
                 jobRepository.saveAndFlush(job);
 
-                // Convert
-                try (InputStream resultStream = activeEngine.convert(sourceStream, job.getOriginalFileName())) {
-                    job.setProgress(80);
+                try (InputStream resultStream = activeEngine.convert(
+                        sourceStream,
+                        job.getSourceType(),
+                        job.getTargetType(),
+                        job.getOriginalFileName())) {
+                    job.setProgress(90);
                     jobRepository.saveAndFlush(job);
 
-                    // Save result back to storage
-                    String resultExt = job.getTargetType();
-                    String resultUrl = storageService.save(resultStream, "output." + resultExt);
+                    String resultUrl = storageService.saveResult(resultStream, "output." + job.getTargetType());
 
                     job.setResultFileUrl(resultUrl);
                     job.setProgress(100);
                     job.setStatus(JobStatus.COMPLETED);
                     job.setCompletedAt(Instant.now());
-                    job.setExpiresAt(Instant.now().plus(1, ChronoUnit.HOURS)); // Default 1 hour TTL
+                    job.setErrorCode(null);
+                    job.setErrorMessage(null);
                 }
             }
+
+            log.info("jobId={} status=COMPLETED engine={} durationMs={}",
+                    job.getId(),
+                    activeEngine.getClass().getSimpleName(),
+                    Duration.between(startedAt, Instant.now()).toMillis());
         } catch (Exception e) {
-            log.error("Failed to process job {}: {}", message.getJobId(), e.getMessage());
             job.setStatus(JobStatus.FAILED);
+            job.setProgress(0);
             job.setErrorCode("CONVERSION_FAILED");
             job.setErrorMessage(e.getMessage());
+            log.error("jobId={} status=FAILED durationMs={} error={}",
+                    job.getId(),
+                    Duration.between(startedAt, Instant.now()).toMillis(),
+                    e.getMessage());
+            throw new IllegalStateException(e);
         } finally {
             jobRepository.saveAndFlush(job);
         }

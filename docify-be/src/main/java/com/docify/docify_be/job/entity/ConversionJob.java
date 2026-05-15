@@ -32,6 +32,9 @@ public class ConversionJob {
     @Column(name = "original_file_name", length = 255)
     private String originalFileName;
 
+    @Column(name = "file_size")
+    private Long fileSize;
+
     @Column(name = "source_file_url", columnDefinition = "TEXT")
     private String sourceFileUrl;
 
@@ -69,6 +72,7 @@ public class ConversionJob {
         }
         Instant now = Instant.now();
         createdAt = now;
+        updatedAt = now;
 }
 
     @PreUpdate

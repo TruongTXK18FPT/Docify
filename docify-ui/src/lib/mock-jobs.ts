@@ -10,7 +10,7 @@ export const mockJobs: ConversionJob[] = [
     status: 'COMPLETED',
     progress: 100,
     createdAt: new Date(Date.now() - 3600000).toISOString(),
-    resultUrl: '#'
+    downloadUrl: '#'
   },
   {
     id: 'job-9124',
@@ -21,6 +21,6 @@ export const mockJobs: ConversionJob[] = [
     status: 'COMPLETED',
     progress: 100,
     createdAt: new Date(Date.now() - 86400000).toISOString(),
-    resultUrl: '#'
+    downloadUrl: '#'
   }
 ];

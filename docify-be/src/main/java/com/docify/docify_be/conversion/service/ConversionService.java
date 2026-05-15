@@ -12,4 +12,6 @@ public interface ConversionService {
     JobResponse getJobStatus(UUID jobId);
     FileDownloadDto getDownloadStream(UUID jobId);
     List<JobResponse> getUserHistory();
+    JobResponse retryJob(UUID jobId);
+    JobResponse cancelJob(UUID jobId);
 }

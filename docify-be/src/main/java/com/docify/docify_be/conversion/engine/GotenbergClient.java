@@ -2,6 +2,7 @@ package com.docify.docify_be.conversion.engine;
 
 import com.docify.docify_be.common.exception.DocifyException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -13,17 +14,23 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.InputStream;
+import java.time.Duration;
 
 @Service
 public class GotenbergClient implements ConversionEngine {
 
-    @Value("${docify.engine.gotenberg.url:http://localhost:3000}")
+    @Value("${docify.gotenberg.base-url:http://localhost:3000}")
     private String gotenbergUrl;
 
     private final RestTemplate restTemplate;
 
-    public GotenbergClient() {
-        this.restTemplate = new RestTemplate();
+    public GotenbergClient(
+            RestTemplateBuilder restTemplateBuilder,
+            @Value("${docify.gotenberg.timeout-seconds:120}") long timeoutSeconds) {
+        this.restTemplate = restTemplateBuilder
+                .connectTimeout(Duration.ofSeconds(timeoutSeconds))
+                .readTimeout(Duration.ofSeconds(timeoutSeconds))
+                .build();
     }
 
     @Override
@@ -34,7 +41,7 @@ public class GotenbergClient implements ConversionEngine {
     }
 
     @Override
-    public InputStream convert(InputStream sourceStream, String originalFilename) throws Exception {
+    public InputStream convert(InputStream sourceStream, String sourceType, String targetType, String originalFilename) throws Exception {
         String endpoint = gotenbergUrl + "/forms/libreoffice/convert";
 
         HttpHeaders headers = new HttpHeaders();
@@ -64,7 +71,7 @@ public class GotenbergClient implements ConversionEngine {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return response.getBody().getInputStream();
             } else {
-                throw new DocifyException("GOTENBERG_ERROR", "Failed to convert document: HTTP " + response.getStatusCodeValue());
+                throw new DocifyException("GOTENBERG_ERROR", "Failed to convert document: HTTP " + response.getStatusCode().value());
             }
         } catch (Exception e) {
             throw new DocifyException("GOTENBERG_ERROR", "Error communicating with Gotenberg: " + e.getMessage());

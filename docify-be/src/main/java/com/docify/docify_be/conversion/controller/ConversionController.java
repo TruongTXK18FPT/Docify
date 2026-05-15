@@ -27,7 +27,7 @@ public class ConversionController {
         return ApiResponse.success(conversionService.getUserHistory());
     }
 
-    @PostMapping("/upload")
+    @PostMapping
     public ApiResponse<JobResponse> uploadAndConvert(
             @RequestParam("file") MultipartFile file,
             @RequestParam("targetType") String targetType) {
@@ -36,10 +36,20 @@ public class ConversionController {
         return ApiResponse.success(response);
     }
 
-    @GetMapping("/{jobId}/status")
+    @GetMapping("/{jobId}")
     public ApiResponse<JobResponse> getJobStatus(@PathVariable UUID jobId) {
         JobResponse response = conversionService.getJobStatus(jobId);
         return ApiResponse.success(response);
+    }
+
+    @PostMapping("/{jobId}/retry")
+    public ApiResponse<JobResponse> retryJob(@PathVariable UUID jobId) {
+        return ApiResponse.success(conversionService.retryJob(jobId));
+    }
+
+    @PostMapping("/{jobId}/cancel")
+    public ApiResponse<JobResponse> cancelJob(@PathVariable UUID jobId) {
+        return ApiResponse.success(conversionService.cancelJob(jobId));
     }
 
     @GetMapping("/{jobId}/download")
